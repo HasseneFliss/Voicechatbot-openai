@@ -1,53 +1,77 @@
 import os
-from dotenv import load_dotenv
-load_dotenv()
-import tempfile
-from openai import OpenAI
-from fastapi.responses import Response
 import datetime
+from dotenv import load_dotenv
+from fastapi.responses import Response
+from openai import OpenAI
 
-openai_api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI()
+# Load environment variables from .env file
+#load_dotenv()
+
+# Optionally set proxy if needed
+# os.environ["HTTP_PROXY"] = "http://your-proxy:port"
+# os.environ["HTTPS_PROXY"] = "http://your-proxy:port"
+
+# Initialize OpenAI client using API key from environment
+client = OpenAI(api_key="xxxxx")
 
 def speech_to_text_conversion(file_path):
-
-    """Converts audio format message to text using OpenAI's Whisper model."""
-    audio_file= open(file_path, "rb") # Opening the audio file in binary read mode
-    transcription = client.audio.transcriptions.create(
-    model="whisper-1",  # Model to use for transcription
-    file=audio_file  # Audio file to transcribe
-    )
-    return transcription.text
-
+    """
+    Converts an audio file to text using OpenAI's Whisper model.
+    """
+    try:
+        with open(file_path, "rb") as audio_file:
+            transcription = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+        return transcription.text
+    except Exception as e:
+        print(f"[ERROR] Speech-to-text failed: {e}")
+        return ""
 
 def text_chat(text):
-    # Generate response using OpenAI
-    response = client.chat.completions.create(
-        model= "gpt-3.5-turbo",
-        messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Who won the world series in 2020?"},
-        {"role": "assistant", "content": "The Los Angeles Dodgers won the World Series in 2020."},
-        {"role": "user", "content": text}
-        ])
-    return response.choices[0].message.content
+    """
+    Generates a response from OpenAI Chat API based on the user's message.
+    """
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Who won the world series in 2020?"},
+                {"role": "assistant", "content": "The Los Angeles Dodgers won the World Series in 2020."},
+                {"role": "user", "content": text}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"[ERROR] Chat generation failed: {e}")
+        return "I'm sorry, I couldn't process that."
 
 def text_to_speech_conversion(text):
-    """Converts text to audio format message using OpenAI's text-to-speech model - tts-1."""
-    if text:  # Check if converted_text is not empty
+    """
+    Converts a given text to spoken audio using OpenAI's TTS model.
+    Returns binary audio data suitable for streaming.
+    """
+    if not text:
+        print("[ERROR] Empty input text for TTS.")
+        return None
+
+    try:
         speech_file_path = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + "_speech.webm"
-        # print("path--------->")
         response = client.audio.speech.create(
-        model="tts-1",# Model to use for text-to-speech conversion
-        voice="fable",# Voice to use for speech synthesis
-        input=text #Text to convert to speech
+            model="tts-1",
+            voice="fable",
+            input=text
         )
-        '''response is binary data, when using strean_to_file function, it will write the binary data in a file'''
-        response.stream_to_file(speech_file_path) # Streaming synthesized speech to file
-        #Read the audio file as binary data
+        response.stream_to_file(speech_file_path)
+
         with open(speech_file_path, "rb") as audio_file:
             audio_data = audio_file.read()
+
         os.remove(speech_file_path)
         return audio_data
-    else:
-        print("Error: converted_text is empty")
+
+    except Exception as e:
+        print(f"[ERROR] Text-to-speech conversion failed: {e}")
+        return None
